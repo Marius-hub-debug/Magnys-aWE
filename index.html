@@ -1287,6 +1287,10 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
    🤝 <b>DIPLOMATIE</b> — Quand un stratège dépasse 40%, les autres forment une coalition !
    <span id="diplo-info" style="margin-left:auto;opacity:.7"></span>
   </div>
+  <div class="alliance-banner" id="olympic-banner" style="display:none;border-color:rgba(245,200,66,.3);background:rgba(245,200,66,.04)">
+   🏅 <b>OLYMPIQUE</b> — Phase de groupes puis élimination directe
+   <span id="olympic-info" style="margin-left:auto;color:var(--gold)">Phase de groupes</span>
+  </div>
   <div class="goat-banner" id="goat-banner" style="display:none">
    🐐 <b>MODE GOAT</b> — Matrice canonique T=5 R=3 P=1 S=0 · Les légendes s'affrontent !
   </div>
@@ -1485,6 +1489,57 @@ const ctx=canvas.getContext("2d");
 const coopCanvas=document.getElementById("coop-cv");
 const coopCtx=coopCanvas?coopCanvas.getContext("2d"):null;
 const CHARS=[
+  {id:"tribu", name:"Tribu", e:"🏕️", color:"#ff9f43", strats:[
+    {sid:"tribu_a", name:"Le Généreux Conditionnel", tag:"Générosité adaptive", tc:"coop",
+     desc:"Coopère plus généreusement selon le taux de coopération de l'adversaire. Plus l'autre coopère, plus Tribu est altruiste.",
+     behav:"P(coop) = 0.5 + taux_coop_adverse × 0.5",
+     stats:{Agressivité:"Proportionnelle inverse",Coopération:"Adaptive",Mémoire:"Historique complet"},
+     tags:[{t:"Générosité adaptive",c:"coop"},{t:"Réciprocité douce",c:"adapt"}],
+     vs:"<b>AllC</b> : coopère à 100%. <b>AllD</b> : tombe à 50% — résiste. <b>TFT</b> : relation très stable.",
+     fn(h,r,st){
+       if(!h.length) return "coop";
+       const cr = h.filter(x=>x==="coop").length / h.length;
+       return Math.random() < (0.5 + cr * 0.5) ? "coop" : "betray";
+     }},
+    {sid:"tribu_b", name:"Le Tribal", tag:"Loyauté tribale", tc:"adapt",
+     desc:"Coopère pleinement avec ceux qui ont coopéré souvent (>60%), trahit les autres sans pitié. Fidélité absolue au clan, hostilité aux étrangers.",
+     behav:"AllC si taux adverse >60%, AllD sinon",
+     stats:{Agressivité:"Binaire",Coopération:"Tribale",Mémoire:"Historique complet"},
+     tags:[{t:"Loyauté de clan",c:"coop"},{t:"Hostilité aux traîtres",c:"aggr"}],
+     vs:"<b>AllC</b> : allié parfait. <b>AllD</b> : ennemi juré. <b>Random</b> : classé ennemi (~50% coop).",
+     fn(h,r,st){
+       if(h.length < 5) return "coop";
+       const cr = h.filter(x=>x==="coop").length / h.length;
+       return cr > 0.60 ? "coop" : "betray";
+     }},
+    {sid:"tribu_c", name:"Le Cluster", tag:"Recherche de cluster", tc:"adapt",
+     desc:"Tente d'identifier les coopérateurs en sondant 3 rounds, puis rejoint leur cluster. Si l'adversaire coopère suffisamment, Tribu s'aligne totalement.",
+     behav:"3 rounds sondage → AllC si >66% coop, sinon TFT",
+     stats:{Agressivité:"Faible",Coopération:"Cluster-seeking",Mémoire:"3 rounds + décision"},
+     tags:[{t:"Clustering",c:"adapt"},{t:"Sondage initial",c:"coop"}],
+     vs:"<b>TFT</b> : identification rapide, alliance parfaite. <b>AllD</b> : sondage négatif → TFT strict.",
+     fn(h,r,st){
+       if(r < 3) return "coop";
+       if(st.cluster === undefined){
+         const probe = h.slice(0, 3).filter(x=>x==="coop").length;
+         st.cluster = probe >= 2;
+       }
+       if(st.cluster) return "coop";
+       return h.length && h[h.length-1] === "betray" ? "betray" : "coop";
+     }},
+    {sid:"tribu_d", name:"L'Altruiste Évolutif", tag:"Conversion progressive", tc:"adapt",
+     desc:"Commence agressif pour tester l'écosystème, puis devient de plus en plus coopératif si le taux global de coopération est élevé. S'adapte à la santé morale du monde.",
+     behav:"Trahit au début, coop rate croît avec le taux global",
+     stats:{Agressivité:"Décroissante",Coopération:"Croissante",Mémoire:"Round + taux global"},
+     tags:[{t:"Évolution altruiste",c:"adapt"},{t:"Conversion écologique",c:"coop"}],
+     vs:"<b>AllC</b> : se convertit vite. <b>AllD</b> : reste méfiant longtemps. <b>TFT</b> : convergence progressive.",
+     fn(h,r,st,sp,gp){
+       const globalCoopEst = h.length > 0 ? h.filter(x=>x==="coop").length / h.length : 0.3;
+       const agePct = Math.min(1, r / 60);
+       const coopProb = agePct * (0.4 + globalCoopEst * 0.5);
+       return Math.random() < coopProb ? "coop" : "betray";
+     }},
+  ]}
   {id:"nick",  name:"Nick",  e:"🐀",color:"#f5c842",strats:[
     {sid:"nick_a",  name:"Le Trompeur",      tag:"Perfide",     tc:"chaos",
      desc:"Coopère les 3 premiers rounds pour installer la confiance, puis trahit indéfiniment. Dévastateur contre les stratégies à mémoire courte.",
@@ -1946,7 +2001,8 @@ const CONFIG_STRUCTURE = [
   {id:"territoire", icon:"🗺", name:"Territoire", desc:"Jeu spatial sur grille"},
   {id:"reseau", icon:"🕸️", name:"Réseau", desc:"Graphe social (Hubs & Isolés)"}, 
   {id:"nexus", icon:"🌐", name:"Nexus", desc:"3 tournois enchaînés"},
-  {id:"observatoire", icon:"🔭", name:"Observatoire", desc:"6 arènes parallèles"}
+  {id:"observatoire", icon:"🔭", name:"Observatoire", desc:"6 arènes parallèles"},
+  {id:"olympic", icon:"🏅", name:"Olympique", desc:"Phase de groupes + bracket éliminatoire"}
 ];
 const CONFIG_MATRIX = [
   {id:"standard", icon:"🎲", name:"Standard", desc:"Générée aléatoirement"},
@@ -2160,7 +2216,8 @@ function buildWikiAll() {
       { i: "🗺", n: "Territoire", b: "Spatial", d: "Simule une grille 2D. Un stratège ne joue qu'avec ses 4 voisins directs. Permet aux coopérateurs de former des clusters inexpugnables." },
       { i: "🕸️", n: "Réseau", b: "Topologie", d: "Les stratèges sont connectés via un graphe aléatoire (Small World). L'évolution se fait par influence locale en copiant le meilleur voisin. Les Hubs ont un avantage énorme." },
       { i: "🌐", n: "Nexus", b: "Méta-tournoi", d: "Enchaîne automatiquement 3 tournois complets consécutifs. Le vrai test d'endurance évolutionnaire." },
-      { i: "🔭", n: "Observatoire", b: "Multivers", d: "Lance 6 arènes parallèles avec des conditions différentes (bruit, rapidité, matrices mutées) et compile un Méta-classement." }
+      { i: "🔭", n: "Observatoire", b: "Multivers", d: "Lance 6 arènes parallèles avec des conditions différentes (bruit, rapidité, matrices mutées) et compile un Méta-classement." },
+      { i: "🏅", n: "Olympique", b: "Phases", d: "Tournoi en deux temps : d'abord une phase de groupes (round-robin interne), puis un bracket éliminatoire direct avec les qualifiés. Le top 2 de chaque groupe avance. Format inspiré des Jeux Olympiques." }
     ]},
     { cat: "2. MATRICES DE GAINS", desc: "Le cœur du Dilemme du Prisonnier.", items: [
       { i: "🎲", n: "Standard", b: "Aléatoire", d: "Génère une matrice aléatoire respectant T > R > P > S à chaque nouvelle manche." },
@@ -4239,11 +4296,75 @@ function openStratModal(idx){
   const cr=((s.coopRate||0.5)*100).toFixed(0);
   const pts=T.points[idx]||0;
   const rank=[...Array(T.N).keys()].sort((a,b)=>T.strats[b].pop-T.strats[a].pop).indexOf(idx)+1;
+
+  // Calcul des attributs pour le radar
+  const coopVal = Math.round((s.coopRate||0.5)*100);
+  const aggrVal = Math.round((1-(s.coopRate||0.5))*100);
+
+  // Mémoire : estimée selon le tag
+  const memMap = {"TFT":50,"Graduel":70,"Grudger":100,"AllC":0,"AllD":0,"Pavlov":40,"Random":0,"Économiste":60,"Philosophe":65,"Miroir":45};
+  let memVal = 30;
+  Object.entries(memMap).forEach(([k,v])=>{ if(s.name.includes(k)||s.tag.includes(k)) memVal=v; });
+
+  // Adaptabilité et Fiabilité estimées
+  const adaptVal = s.tc==="adapt"?80:s.tc==="chaos"?60:s.tc==="rand"?50:s.tc==="coop"?40:s.tc==="aggr"?30:50;
+  const reliabVal = s.tc==="adapt"?70:s.tc==="coop"?90:s.tc==="aggr"?85:s.tc==="rand"?10:s.tc==="chaos"?20:60;
+
+  const radarAttrs = [
+    {label:"Agression",  val:aggrVal,  color:"#ff3060"},
+    {label:"Coopération",val:coopVal,  color:"#00e5c8"},
+    {label:"Mémoire",    val:memVal,   color:"#5ba4f7"},
+    {label:"Adaptabilité",val:adaptVal, color:"#f5c842"},
+    {label:"Fiabilité",  val:reliabVal, color:"#3de87a"},
+  ];
+
+  // Dessin du radar SVG
+  const R=62, cx=80, cy=72, N5=5;
+  function polarPt(i,r){ const a=Math.PI*2/N5*i - Math.PI/2; return {x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)}; }
+  let gridSVG="", axisSVG="", labelSVG="", dataSVG="";
+  [0.25,0.5,0.75,1].forEach(t=>{
+    const pts=radarAttrs.map((_,i)=>polarPt(i,R*t));
+    gridSVG+=`<polygon points="${pts.map(p=>p.x+","+p.y).join(" ")}" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="1"/>`;
+  });
+  radarAttrs.forEach((_,i)=>{
+    const p=polarPt(i,R);
+    axisSVG+=`<line x1="${cx}" y1="${cy}" x2="${p.x}" y2="${p.y}" stroke="rgba(255,255,255,.1)" stroke-width="1"/>`;
+  });
+  radarAttrs.forEach((a,i)=>{
+    const lp=polarPt(i,R+16);
+    labelSVG+=`<text x="${lp.x}" y="${lp.y}" text-anchor="middle" dominant-baseline="middle" fill="${a.color}" font-size="7" font-family="DM Mono,monospace">${a.label}</text>`;
+  });
+  const dataPts=radarAttrs.map((a,i)=>polarPt(i,R*a.val/100));
+  const polyData=dataPts.map(p=>p.x+","+p.y).join(" ");
+  dataSVG+=`<polygon points="${polyData}" fill="${s.color}33" stroke="${s.color}" stroke-width="1.5"/>`;
+  dataPts.forEach((p,i)=>{
+    dataSVG+=`<circle cx="${p.x}" cy="${p.y}" r="3" fill="${radarAttrs[i].color}" stroke="${s.color}" stroke-width="1"/>`;
+  });
+  const radarSVG=`<svg width="160" height="144" viewBox="0 0 160 144" xmlns="http://www.w3.org/2000/svg">${gridSVG}${axisSVG}${dataSVG}${labelSVG}</svg>`;
+
+  // Performances récentes (sparkline texte)
+  const spark=T.sparkHistory?.[idx]||[];
+  const trend=spark.length>=4?(spark[spark.length-1]>spark[spark.length-4]?"📈 En hausse":"📉 En baisse"):"—";
+
+  // Forces/faiblesses
+  const strengths=[];const weaknesses=[];
+  if(coopVal>65)strengths.push("Coopérateur fiable");
+  if(aggrVal>65)strengths.push("Très dissuasif");
+  if(memVal>70)strengths.push("Longue mémoire");
+  if(adaptVal>70)strengths.push("Très adaptatif");
+  if(reliabVal>80)strengths.push("Comportement prévisible");
+  if(coopVal<35)weaknesses.push("Exploitable par AllD");
+  if(aggrVal>80)weaknesses.push("Spirale de représailles");
+  if(memVal<20)weaknesses.push("Aucune mémoire");
+  if(adaptVal<35)weaknesses.push("Rigide face au changement");
+  if(reliabVal<25)weaknesses.push("Imprévisible");
+
   document.getElementById("sm-emoji").textContent=s.e;
   document.getElementById("sm-emoji").style.textShadow=`0 0 20px ${s.color}`;
   document.getElementById("sm-name").textContent=s.name;
   document.getElementById("sm-name").style.color=s.color;
   document.getElementById("sm-char").textContent=s.tag||"";
+
   document.getElementById("sm-stats").innerHTML=`
     <div class="sm-stat"><div class="sm-stat-lbl">Population</div>
       <div class="sm-stat-val" style="color:${s.color}">${pct}%</div><div class="sm-stat-sub">Rang #${rank}</div></div>
@@ -4252,12 +4373,23 @@ function openStratModal(idx){
       <div class="sm-stat-sub">${cr>60?"Coopératif":cr>35?"Adaptatif":"Agressif"}</div></div>
     <div class="sm-stat"><div class="sm-stat-lbl">Points</div>
       <div class="sm-stat-val" style="color:var(--gold)">${pts}</div><div class="sm-stat-sub">ce tournoi</div></div>
-    <div class="sm-stat"><div class="sm-stat-lbl">Génération</div>
-      <div class="sm-stat-val">${T.gen}</div><div class="sm-stat-sub">actuelle</div></div>`;
+    <div class="sm-stat"><div class="sm-stat-lbl">Tendance</div>
+      <div class="sm-stat-val" style="font-size:.75rem">${trend}</div><div class="sm-stat-sub">pop. récente</div></div>`;
+
   document.getElementById("sm-coop-bar").innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <div style="flex-shrink:0">${radarSVG}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:7px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px">Forces</div>
+        ${strengths.length?strengths.map(s=>`<div style="font-size:7px;color:var(--green);margin-bottom:2px">✓ ${s}</div>`).join(""):`<div style="font-size:7px;color:var(--muted)">—</div>`}
+        <div style="font-size:7px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:5px 0 3px">Faiblesses</div>
+        ${weaknesses.length?weaknesses.map(w=>`<div style="font-size:7px;color:var(--red);margin-bottom:2px">✗ ${w}</div>`).join(""):`<div style="font-size:7px;color:var(--muted)">—</div>`}
+      </div>
+    </div>
     <div style="font-size:7px;color:var(--muted);margin-bottom:4px">Taux de coopération récent</div>
     <div class="sm-coop-row"><div class="sm-coop-bg"><div class="sm-coop-fill" style="width:${cr}%;background:${s.color}"></div></div>
     <span style="font-size:8px;color:${s.color};min-width:28px;text-align:right">${cr}%</span></div>`;
+
   document.getElementById("sm-tag-row").innerHTML=(s.tags||[]).map(t=>`<span class="tag ${t.c}">${t.t}</span>`).join("")+
     (s.isMe?`<span class="tag adapt">◀ vous</span>`:"")+(s.name.includes("*")?`<span class="tag chaos">🧬 mutant</span>`:"");
   document.getElementById("sm-desc").textContent=s.desc||"";
@@ -5982,6 +6114,139 @@ function endTutorial() {
   document.querySelectorAll('.tut-highlight').forEach(el => el.classList.remove('tut-highlight'));
   document.getElementById("tut-box").style.transform = "none"; 
 }
+// ===== MODE OLYMPIQUE =====
+
+function initOlympic() {
+  const N = T.N;
+  const nGroups = N <= 8 ? 2 : N <= 16 ? 4 : 8;
+  const groupSize = Math.ceil(N / nGroups);
+  const shuffled = [...Array(N).keys()].sort(() => Math.random() - 0.5);
+  T.olympicGroups = [];
+  for (let g = 0; g < nGroups; g++) {
+    T.olympicGroups.push(shuffled.slice(g * groupSize, Math.min((g + 1) * groupSize, N)));
+  }
+  T.olympicPhase = "groups"; // "groups" | "bracket"
+  T.olympicGroupResults = []; // scores par groupe
+  T.olympicQualifiers = []; // indices qui avancent
+  T.olympicBracket = null;
+  T.olympicElim = [];
+  addEvt("ea", `🏅 Phase de groupes — ${nGroups} groupes de ~${groupSize} stratèges`);
+  document.getElementById("olympic-banner").style.display = "";
+  document.getElementById("olympic-info").textContent = "Phase de groupes";
+}
+
+// Patch getGroups pour olympique
+const _origGetGroups = getGroups;
+getGroups = function() {
+  if (!T || T.structure !== "olympic") return _origGetGroups();
+  if (T.olympicPhase === "groups") {
+    return T.olympicGroups.filter(g => g.length > 0);
+  } else if (T.olympicPhase === "bracket") {
+    return T.olympicBracketPairs || [T.olympicQualifiers];
+  }
+  return _origGetGroups();
+};
+
+// Patch endPhase pour olympique
+const _origEndPhase2 = endPhase;
+endPhase = function(phase) {
+  if (!T || T.structure !== "olympic") { _origEndPhase2(phase); return; }
+
+  if (T.olympicPhase === "groups") {
+    // Calcul des qualifiés : top 2 par groupe
+    T.olympicQualifiers = [];
+    T.olympicGroups.forEach((grp, gi) => {
+      const sorted = [...grp].sort((a, b) => T.strats[b].pop - T.strats[a].pop);
+      const nQual = Math.max(1, Math.min(2, Math.floor(sorted.length / 2)));
+      const quals = sorted.slice(0, nQual);
+      const elims = sorted.slice(nQual);
+      T.olympicQualifiers.push(...quals);
+      T.olympicElim.push(...elims.reverse());
+      addEvt("ea", `🏅 Groupe ${gi + 1} — ${quals.map(i => T.strats[i].e + T.strats[i].name).join(", ")} qualifiés`);
+    });
+
+    // Attribution points éliminés de groupes
+    const ptmap = getPtMap(T.N);
+    T.olympicElim.forEach((idx, r) => {
+      T.points[idx] += ptmap[T.N - 1 - r] || 0;
+    });
+
+    // Passage en bracket éliminatoire
+    T.olympicPhase = "bracket";
+    document.getElementById("olympic-info").textContent = `Bracket éliminatoire — ${T.olympicQualifiers.length} qualifiés`;
+
+    // Initialiser les paires du bracket
+    const q = [...T.olympicQualifiers].sort(() => Math.random() - 0.5);
+    T.olympicBracketPairs = [];
+    for (let i = 0; i < q.length - 1; i += 2) {
+      T.olympicBracketPairs.push([q[i], q[i + 1]]);
+    }
+    if (q.length % 2 === 1) T.olympicBracketPairs.push([q[q.length - 1], -1]); // bye
+
+    // Reset pops pour le bracket
+    T.olympicQualifiers.forEach(i => { T.strats[i].pop = T.POP / T.olympicQualifiers.length; T.strats[i].st = {}; });
+
+    T.phase = phase + 1;
+    setSt("wait", "Phase de groupes terminée — Bracket éliminatoire");
+    document.getElementById("btn-next").style.display = "";
+    return;
+  }
+
+  if (T.olympicPhase === "bracket") {
+    const newWinners = [], newElims = [];
+    (T.olympicBracketPairs || []).forEach(pair => {
+      if (pair[1] < 0) { newWinners.push(pair[0]); return; } // bye
+      const winner = T.strats[pair[0]].pop >= T.strats[pair[1]].pop ? pair[0] : pair[1];
+      const loser = winner === pair[0] ? pair[1] : pair[0];
+      newWinners.push(winner);
+      newElims.push(loser);
+      addEvt("ek2", `⚔️ ${T.strats[winner].e}${T.strats[winner].name} élimine ${T.strats[loser].e}${T.strats[loser].name}`);
+    });
+
+    // Attribuer les points aux éliminés de ce round
+    const ptmap = getPtMap(T.N);
+    newElims.forEach((idx, r) => {
+      T.points[idx] += ptmap[Math.min(ptmap.length - 1, T.olympicElim.length + r)] || 0;
+    });
+    T.olympicElim.push(...newElims.reverse());
+
+    if (newWinners.length <= 1) {
+      // Finale terminée
+      if (newWinners.length === 1) T.points[newWinners[0]] += ptmap[0] || 0;
+      T.finalRanking = [...newWinners, ...T.olympicElim.slice().reverse()];
+      [...Array(T.N).keys()].forEach(i => { if (!T.finalRanking.includes(i)) T.finalRanking.push(i); });
+      updatePtsTable();
+      document.getElementById("pts-main").style.display = "";
+      showFinal();
+      return;
+    }
+
+    // Prochaine paire du bracket
+    const q2 = [...newWinners].sort(() => Math.random() - 0.5);
+    T.olympicBracketPairs = [];
+    for (let i = 0; i < q2.length - 1; i += 2) T.olympicBracketPairs.push([q2[i], q2[i + 1]]);
+    if (q2.length % 2 === 1) T.olympicBracketPairs.push([q2[q2.length - 1], -1]);
+
+    q2.forEach(i => { T.strats[i].pop = T.POP / q2.length; T.strats[i].st = {}; });
+
+    T.phase = phase + 1;
+    const round = T.olympicBracketPairs.filter(p => p[1] >= 0).length;
+    const label = round === 1 ? "🏅 FINALE" : round === 2 ? "🥇 Demi-finales" : `Round éliminatoire`;
+    document.getElementById("olympic-info").textContent = label;
+    setSt("wait", `${label} — ${newWinners.length} qualifiés`);
+    document.getElementById("btn-next").style.display = "";
+    addEvt("ec", `🏅 ${label} — ${newWinners.length} qualifiés restants`);
+  }
+};
+
+// Patch initTournament pour olympique
+const _origInitTournament = initTournament;
+initTournament = function() {
+  _origInitTournament();
+  if (T && T.structure === "olympic") {
+    initOlympic();
+  }
+};
 </script>
 </body>
 </html>
