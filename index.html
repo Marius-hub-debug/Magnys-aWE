@@ -1329,6 +1329,17 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
    🌐 <b>NEXUS</b> — Tournoi de tournois · 3 tournois s'enchaînent automatiquement
    <span id="nexus-info" style="margin-left:auto;color:var(--purple)">Tournoi 1/3</span>
   </div>
+  <div class="alliance-banner" id="parlement-banner" style="display:none;border-color:rgba(0,229,200,.3);background:rgba(0,229,200,.04)">
+   🗳 <b>PARLEMENT</b> — Vote tous les 30 gens · La majorité modifie R ou P
+   <span id="parl-info" style="margin-left:auto;color:var(--teal)"></span>
+  </div>
+  <div class="alliance-banner" id="marche-banner" style="display:none;border-color:rgba(245,200,66,.3);background:rgba(245,200,66,.04)">
+   💱 <b>MARCHÉ NOIR</b> — 15% des gains circulent vers les voisins coopérateurs
+  </div>
+  <div class="alliance-banner" id="lamarck-banner" style="display:none;border-color:rgba(180,127,255,.3);background:rgba(180,127,255,.04)">
+   🧬 <b>LAMARCKIEN</b> — La mémoire ancestrale oriente les comportements futurs
+   <span id="lamarck-info" style="margin-left:auto;color:var(--purple)"></span>
+  </div>
   <div class="chaos-banner" id="duel-banner" style="display:none">
    ⚔️ <b>DUEL</b> — 1v1 simple élimination · le perdant est éliminé
    <span id="duel-info" style="margin-left:auto;color:var(--gold)"></span>
@@ -1977,6 +1988,107 @@ const CHARS=[
        return coopRate<0.5?"betray":"coop";
      }},
   ]},
+  ,{id:"zara", name:"Zara", e:"🔭", color:"#00d4ff", strats:[
+    {sid:"zara_a", name:"L'Astronome", tag:"Bayésien", tc:"adapt",
+     desc:"Modèle bayésien : estime la probabilité que l'adversaire soit coopérateur selon l'historique complet, puis choisit l'action qui maximise l'espérance mathématique de gain.",
+     behav:"P(coop|historique) × R + P(trahison|historique) × S vs inverse — prend le max",
+     stats:{Agressivité:"Calculée",Coopération:"Rationnelle",Mémoire:"Historique complet + prior"},
+     tags:[{t:"Bayésien",c:"adapt"},{t:"Espérance max",c:"adapt"}],
+     vs:"<b>AllD</b> : détecte vite et bascule. <b>TFT</b> : estime coop élevée, coopère. <b>Vagabond</b> : repère les cycles.",
+     fn(h,r,st,sp,gp){
+       if(!h.length) return "coop";
+       // Prior bayésien : beta(2,2) = 50% de base
+       const alpha = 2 + h.filter(x=>x==="coop").length;
+       const beta  = 2 + h.filter(x=>x==="betray").length;
+       const pCoop = alpha / (alpha + beta);
+       // Matrice standard estimée : R=3,T=5,P=1,S=0
+       const R=3,T=5,P=1,S=0;
+       // Espérance si je coopère : pCoop*R + (1-pCoop)*S
+       const eC = pCoop * R + (1 - pCoop) * S;
+       // Espérance si je trahis : pCoop*T + (1-pCoop)*P
+       const eD = pCoop * T + (1 - pCoop) * P;
+       // Seuil légèrement biaisé vers la coopération (soft)
+       return eC >= eD * 0.88 ? "coop" : "betray";
+     }},
+
+    {sid:"zara_b", name:"Le Mémétique", tag:"Apprentissage social", tc:"adapt",
+     desc:"Observe tous les adversaires rencontrés dans les 5 derniers rounds. Imite la stratégie (coop/betray) qui a obtenu le meilleur score moyen sur cette fenêtre. Méta-apprentissage de groupe.",
+     behav:"Copie le coup dominant parmi les 5 derniers rounds adverses pondérés par score",
+     stats:{Agressivité:"Variable",Coopération:"Mimétique",Mémoire:"5 rounds glissants"},
+     tags:[{t:"Mimétisme social",c:"adapt"},{t:"Méta-apprentissage",c:"adapt"}],
+     vs:"<b>AllC</b> : devient AllC. <b>AllD</b> : devient AllD. <b>TFT majoritaire</b> : converge vers TFT.",
+     fn(h,r,st){
+       if(h.length < 3) return "coop";
+       const window = h.slice(-5);
+       // Score estimé : coop adverse = ils coopèrent (je gagne R ou T)
+       // On imite le coup qui a le plus "réussi" côté adverse
+       const coopScore = window.filter(x=>x==="coop").length * 3;   // R=3 symbolique
+       const betrayScore = window.filter(x=>x==="betray").length * 1; // P=1 symbolique
+       // Si les coopérateurs ont dominé → coopère, sinon → trahit
+       if(coopScore >= betrayScore * 1.4) return "coop";
+       if(betrayScore > coopScore * 1.4) return "betray";
+       // Égalité : copie le dernier coup adverse
+       return h[h.length-1] === "coop" ? "coop" : "betray";
+     }},
+
+    {sid:"zara_c", name:"Le Chirurgien", tag:"Anti-pattern", tc:"adapt",
+     desc:"Coopère normalement. Mais détecte activement les trahisons périodiques (pattern CCCD, Saboteur every-7, etc.). Quand un cycle est identifié, il anticipe et punit exactement dans la fenêtre de trahison.",
+     behav:"Analyse autocorrélation sur 3-8 rounds → punit si trahison cyclique détectée",
+     stats:{Agressivité:"Chirurgicale",Coopération:"Par défaut",Mémoire:"Fenêtre 8 rounds"},
+     tags:[{t:"Détection de cycle",c:"adapt"},{t:"Anti-saboteur",c:"def"}],
+     vs:"<b>Saboteur</b> : détecte le cycle 7 et punit juste avant. <b>CCCD</b> : anticipe le D du pattern. <b>AllD</b> : bascule en Grudger.",
+     fn(h,r,st){
+       if(h.length < 6) return "coop";
+       if(!st.cycle) st.cycle = 0;
+       if(!st.detected) st.detected = false;
+       // Détection de trahisons périodiques : teste cycles 3-8
+       for(let period = 3; period <= 8; period++){
+         if(h.length < period * 2) continue;
+         let matches = 0;
+         for(let i = 0; i < period; i++){
+           if(h[h.length-1-i] === h[h.length-1-i-period]) matches++;
+         }
+         if(matches >= period - 1){ // cycle détecté
+           st.detected = true;
+           st.cycle = period;
+           // Si la trahison dans le cycle arrive au prochain round
+           const posInCycle = h.length % period;
+           const betrayPosInCycle = [];
+           for(let i=0;i<period;i++) if(h[h.length-period+i]==="betray") betrayPosInCycle.push(i);
+           if(betrayPosInCycle.includes(posInCycle)) return "betray"; // punit en avance
+           break;
+         }
+       }
+       // Pas de cycle → TFT soft
+       return h[h.length-1] === "betray" ? "betray" : "coop";
+     }},
+
+    {sid:"zara_d", name:"L'Archipel", tag:"États biome", tc:"adapt",
+     desc:"Stratégie à 3 états selon la santé coopérative globale de l'écosystème. En biome sain (>60% coop) : Détective + généreux. En biome neutre : TFT strict. En biome hostile (<30%) : Grudger total.",
+     behav:"Coop>60% → GTFT | 30-60% → TFT | <30% → Grudger permanent",
+     stats:{Agressivité:"Contextuelle",Coopération:"Écologique",Mémoire:"Taux global + historique"},
+     tags:[{t:"États multiples",c:"adapt"},{t:"Biome-dépendant",c:"adapt"}],
+     vs:"<b>Écosystème AllC</b> : explore et coopère. <b>Écosystème mixte</b> : TFT robuste. <b>Enfer AllD</b> : Grudger immédiat.",
+     fn(h,r,st,sp,gp){
+       // Estimation du biome global via notre propre historique (proxy)
+       const globalCoopEst = h.length > 5
+         ? h.slice(-20).filter(x=>x==="coop").length / Math.min(h.length,20)
+         : 0.55; // prior neutre
+       if(globalCoopEst > 0.60){
+         // Biome sain : Détective-GTFT (sonde 4 rounds puis généreux)
+         if(r < 4) return ["coop","coop","betray","coop"][r] || "coop";
+         const betrayed = h.filter(x=>x==="betray").length;
+         if(betrayed === 0) return "coop"; // AllC pur → coopère
+         return h[h.length-1]==="betray" ? (Math.random()<0.15?"coop":"betray") : "coop";
+       } else if(globalCoopEst > 0.30){
+         // Biome neutre : TFT strict
+         return !h.length ? "coop" : h[h.length-1]==="betray" ? "betray" : "coop";
+       } else {
+         // Biome hostile : Grudger
+         return h.includes("betray") ? "betray" : "coop";
+       }
+     }},
+  ]}
 ];
 const ALL_STRATS=CHARS.flatMap(c=>c.strats.map(s=>({...s,charId:c.id,charName:c.name,e:c.e,color:c.color})));
 const PTMAP4=[4,3,2,1];
@@ -2003,6 +2115,9 @@ const CONFIG_STRUCTURE = [
   {id:"nexus", icon:"🌐", name:"Nexus", desc:"3 tournois enchaînés"},
   {id:"observatoire", icon:"🔭", name:"Observatoire", desc:"6 arènes parallèles"},
   {id:"olympic", icon:"🏅", name:"Olympique", desc:"Phase de groupes + bracket éliminatoire"}
+  {id:"parlement", icon:"🗳", name:"Parlement", desc:"Vote collectif modifie la matrice"},
+  {id:"marche_noir", icon:"💱", name:"Marché Noir", desc:"Échange de gains entre voisins"},
+  {id:"lamarck", icon:"🧬", name:"Lamarckien", desc:"Mémoire héréditaire transmise"}
 ];
 const CONFIG_MATRIX = [
   {id:"standard", icon:"🎲", name:"Standard", desc:"Générée aléatoirement"},
@@ -2310,17 +2425,56 @@ function buildWikiAll() {
     </div>`).join("")}`;
   
   const archs = ["AllC", "TFT", "Graduel", "TF2T", "GTFT", "Pavlov", "AllD", "Grudger", "Chaos"];
-  const outcomes = {
-    "AllC": { AllC: "++", TFT: "++", Graduel: "++", TF2T: "++", GTFT: "++", Pavlov: "+", AllD: "--", Grudger: "++", Chaos: "+" },
-    "TFT": { AllC: "++", TFT: "++", Graduel: "++", TF2T: "++", GTFT: "++", Pavlov: "+", AllD: "-", Grudger: "++", Chaos: "~" },
-    "Graduel": { AllC: "++", TFT: "++", Graduel: "++", TF2T: "++", GTFT: "++", Pavlov: "+", AllD: "~", Grudger: "++", Chaos: "+" },
-    "TF2T": { AllC: "++", TFT: "++", Graduel: "++", TF2T: "++", GTFT: "++", Pavlov: "+", AllD: "+", Grudger: "++", Chaos: "+" },
-    "GTFT": { AllC: "++", TFT: "++", Graduel: "++", TF2T: "++", GTFT: "++", Pavlov: "+", AllD: "-", Grudger: "++", Chaos: "+" },
-    "Pavlov": { AllC: "+", TFT: "+", Graduel: "+", TF2T: "+", GTFT: "+", Pavlov: "+", AllD: "-", Grudger: "+", Chaos: "~" },
-    "AllD": { AllC: "++", TFT: "-", Graduel: "~", TF2T: "+", GTFT: "~", Pavlov: "-", AllD: "--", Grudger: "--", Chaos: "+" },
-    "Grudger": { AllC: "++", TFT: "++", Graduel: "++", TF2T: "++", GTFT: "++", Pavlov: "+", AllD: "--", Grudger: "++", Chaos: "~" },
-    "Chaos": { AllC: "+", TFT: "~", Graduel: "+", TF2T: "+", GTFT: "+", Pavlov: "~", AllD: "+", Grudger: "~", Chaos: "~" },
-  };
+const ALL_IDS = ALL_STRATS.map(s=>s.sid);
+  const FULL_OUTCOMES = {};
+  // Fonction heuristique basée sur tc + comportements
+  function estimateOutcome(sA, sB){
+    const tcA=sA.tc, tcB=sB.tc;
+    // Matrice de compatibilité tc vs tc
+    const matrix={
+      coop:  {coop:"pp",adapt:"pp",def:"pp",rand:"n",chaos:"n",aggr:"nn",exploit:"nn"},
+      adapt: {coop:"pp",adapt:"pp",def:"p",rand:"e",chaos:"e",aggr:"n",exploit:"n"},
+      def:   {coop:"pp",adapt:"p",def:"p",rand:"p",chaos:"e",aggr:"n",exploit:"n"},
+      rand:  {coop:"p",adapt:"e",def:"e",rand:"e",chaos:"e",aggr:"p",exploit:"e"},
+      chaos: {coop:"p",adapt:"e",def:"e",rand:"e",chaos:"e",aggr:"p",exploit:"p"},
+      aggr:  {coop:"pp",adapt:"n",def:"n",rand:"p",chaos:"p",aggr:"n",exploit:"e"},
+      exploit:{coop:"pp",adapt:"n",def:"n",rand:"e",chaos:"p",aggr:"e",exploit:"e"},
+    };
+    return (matrix[tcA]&&matrix[tcA][tcB])||"e";
+  }
+  ALL_STRATS.forEach(sA=>{
+    FULL_OUTCOMES[sA.sid]={};
+    ALL_STRATS.forEach(sB=>{
+      if(sA.sid===sB.sid){FULL_OUTCOMES[sA.sid][sB.sid]="diag";return;}
+      FULL_OUTCOMES[sA.sid][sB.sid]=estimateOutcome(sA,sB);
+    });
+  });
+  const SYM={pp:"⊕⊕",p:"⊕",e:"~",n:"⊖",nn:"⊖⊖"};
+  const BG={pp:"rgba(0,229,200,.22)",p:"rgba(61,232,122,.14)",e:"rgba(255,255,255,.04)",n:"rgba(255,140,0,.14)",nn:"rgba(255,48,96,.22)"};
+  const FG={pp:"var(--teal)",p:"var(--green)",e:"var(--muted)",n:"var(--amber)",nn:"var(--red)"};
+  let mhtml=`<div style="overflow-x:auto;overflow-y:auto;max-height:520px;border:1px solid var(--border);border-radius:6px"><table class="mu-table" style="font-size:6.5px;table-layout:fixed">`;
+  mhtml+=`<tr><th style="min-width:90px;position:sticky;top:0;left:0;z-index:4;background:rgba(15,15,34,1)">vs →</th>`;
+  ALL_STRATS.forEach(s=>{
+    mhtml+=`<th style="min-width:30px;text-align:center;writing-mode:vertical-rl;transform:rotate(180deg);padding:6px 3px;position:sticky;top:0;z-index:3;background:rgba(15,15,34,1);color:${s.color}" title="${s.name}">${s.e}</th>`;
+  });
+  mhtml+="</tr>";
+  ALL_STRATS.forEach(sA=>{
+    mhtml+=`<tr><td style="font-size:7px;white-space:nowrap;position:sticky;left:0;z-index:2;background:rgba(15,15,34,1);min-width:90px;border-right:1px solid var(--border)"><span style="color:${sA.color}">${sA.e}</span> ${sA.name.slice(0,14)}</td>`;
+    ALL_STRATS.forEach(sB=>{
+      if(sA.sid===sB.sid){mhtml+=`<td style="background:rgba(255,255,255,.03);text-align:center;color:var(--dim)">—</td>`;return;}
+      const o=FULL_OUTCOMES[sA.sid][sB.sid]||"e";
+      mhtml+=`<td class="mu-vp" style="background:${BG[o]};color:${FG[o]};text-align:center;cursor:default" title="${sA.name} vs ${sB.name}: ${o}">${SYM[o]}</td>`;
+    });
+    mhtml+="</tr>";
+  });
+  mhtml+="</table></div>";
+  mhtml+=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:7px;color:var(--muted)">
+    <span><b style="color:var(--teal)">⊕⊕</b> Excellent</span><span><b style="color:var(--green)">⊕</b> Bon</span>
+    <span><b>~</b> Neutre</span><span><b style="color:var(--amber)">⊖</b> Faible</span>
+    <span><b style="color:var(--red)">⊖⊖</b> Écrasé</span>
+    <span style="margin-left:auto;color:var(--dim)">Basé sur compatibilité tc × tc — ${ALL_STRATS.length}×${ALL_STRATS.length} = ${ALL_STRATS.length*ALL_STRATS.length} cellules</span>
+  </div>`;
+  document.getElementById("wp-matchups").innerHTML = mhtml;
   const symMap = { "++": "pp", "+": "p", "~": "e", "-": "n", "--": "nn" };
   const lblMap = { "++": "⊕⊕", "+": "⊕", "~": "~", "-": "⊖", "--": "⊖⊖" };
   document.getElementById("wp-matchups").innerHTML = `
@@ -2481,6 +2635,9 @@ const maxPhases = p.structure === "swiss" ? Math.min(p.PHASES+1, 6) :
   if(p.modifiers.includes("coevo")){T.strats.forEach(s=>{s._origFn=s.fn;s._mutRate=0;s._mutParent=null;});}
   if(p.modifiers.includes("civilisation")) initCivilisation();
   if(p.structure === "observatoire") initObservatoire();
+  if(p.structure === "parlement") initParlement();
+  if(p.structure === "marche_noir") initMarcheNoir();
+  if(p.structure === "lamarck") initLamarck();
   hlIdx=null; prevPops=null;
   document.getElementById("pts-main").style.display="none";
   document.getElementById("final").classList.remove("show");
@@ -2509,6 +2666,9 @@ const maxPhases = p.structure === "swiss" ? Math.min(p.PHASES+1, 6) :
   if(p.matrix === "goat") document.getElementById("goat-banner").style.display="";
   if(p.matrix === "arms") document.getElementById("arms-banner").style.display="";
   if(p.matrix === "eco") document.getElementById("eco-banner").style.display="";
+  if(p.structure === "parlement") { const b=document.getElementById("parlement-banner"); if(b) b.style.display=""; }
+  if(p.structure === "marche_noir") { const b=document.getElementById("marche-banner"); if(b) b.style.display=""; }
+  if(p.structure === "lamarck") { const b=document.getElementById("lamarck-banner"); if(b) b.style.display=""; }
   
   if(p.matrix === "quantique") document.getElementById("quantique-banner").style.display="";
   if(p.structure === "reseau") document.getElementById("reseau-banner").style.display="";
@@ -2896,6 +3056,9 @@ function runPhase(){
       checkRoyaleElim();
       if(T.structure==="territoire"){ terrStep(currentPay); }
       else if(T.structure==="reseau"){ reseauStep(currentPay); }
+      else if(T.structure==="parlement"){ parlStep(currentPay); }
+      else if(T.structure==="marche_noir"){ marcheStep(currentPay); }
+      else if(T.structure==="lamarck"){ lamarckStep(currentPay); }
       else{ 
           
           getGroups().forEach(g=>simGroup(g, currentPay)); 
@@ -4138,6 +4301,131 @@ function reseauStep(pay){
   T.strats.forEach(s => { 
     s.pop = (s.pop / newTotal) * T.POP; 
     if(s.pop > s.peakPop) s.peakPop = s.pop; 
+  });
+}
+// ===== MODE PARLEMENT =====
+function initParlement() {
+  T.parlVotes = [];        // historique des votes
+  T.parlMatrix = {...T.pendingPayoff}; // matrice courante
+  T.parlNextVoteIn = 30;
+  addEvt("ea", "🗳 PARLEMENT — Chaque stratège vote. La majorité modifie la matrice !");
+  document.getElementById("parlement-banner") && (document.getElementById("parlement-banner").style.display = "");
+}
+
+function parlStep(pay) {
+  if(!T.parlNextVoteIn) T.parlNextVoteIn = 30;
+  T.parlNextVoteIn--;
+  if(T.parlNextVoteIn <= 0) {
+    T.parlNextVoteIn = 30;
+    // Vote pondéré par la population : coop = oui, betray dominant = non
+    let oui = 0, non = 0;
+    T.strats.forEach(s => {
+      const weight = s.pop / T.POP;
+      if((s.coopRate || 0.5) >= 0.5) oui += weight;
+      else non += weight;
+    });
+    const passed = oui > non;
+    if(passed) {
+      // Résolution passée : R monte, T baisse légèrement
+      T.parlMatrix.R = Math.min(T.parlMatrix.T - 0.3, T.parlMatrix.R + 0.2);
+      T.parlMatrix.coop = { coop:[T.parlMatrix.R, T.parlMatrix.R], betray:[T.parlMatrix.S, T.parlMatrix.T] };
+      T.parlMatrix.betray = { coop:[T.parlMatrix.T, T.parlMatrix.S], betray:[T.parlMatrix.P, T.parlMatrix.P] };
+      addEvt("ea", `🗳 Résolution ADOPTÉE (${(oui*100).toFixed(0)}% pour) — R → ${T.parlMatrix.R.toFixed(2)}`);
+      T.milestones.push({gen:T.gen, txt:`🗳 Résolution adoptée — coopération renforcée`, type:"lead"});
+    } else {
+      // Rejetée : P monte (anarchie)
+      T.parlMatrix.P = Math.min(T.parlMatrix.R - 0.2, T.parlMatrix.P + 0.15);
+      T.parlMatrix.coop = { coop:[T.parlMatrix.R, T.parlMatrix.R], betray:[T.parlMatrix.S, T.parlMatrix.T] };
+      T.parlMatrix.betray = { coop:[T.parlMatrix.T, T.parlMatrix.S], betray:[T.parlMatrix.P, T.parlMatrix.P] };
+      addEvt("ek", `🗳 Résolution REJETÉE (${(non*100).toFixed(0)}% contre) — P → ${T.parlMatrix.P.toFixed(2)}`);
+      T.milestones.push({gen:T.gen, txt:`🗳 Résolution rejetée — anarchie gagne`, type:"collapse"});
+    }
+    T.parlVotes.push({gen:T.gen, oui, non, passed});
+  }
+  // Simule le groupe avec la matrice parlementaire courante
+  getGroups().forEach(g => simGroup(g, T.parlMatrix));
+}
+
+// ===== MODE MARCHÉ NOIR =====
+function initMarcheNoir() {
+  T.marcheProfits = new Float64Array(T.N); // gains accumulés échangeables
+  T.marcheNetwork = [];
+  // Réseau simple : chaque stratège connecté à 2-3 voisins aléatoires
+  for(let i=0; i<T.N; i++) {
+    T.marcheNetwork[i] = [];
+    const nNeighbors = 2 + Math.floor(Math.random()*2);
+    for(let k=0; k<nNeighbors; k++) {
+      let j = Math.floor(Math.random()*T.N);
+      while(j===i || T.marcheNetwork[i].includes(j)) j = Math.floor(Math.random()*T.N);
+      T.marcheNetwork[i].push(j);
+      if(!T.marcheNetwork[j]) T.marcheNetwork[j]=[];
+      if(!T.marcheNetwork[j].includes(i)) T.marcheNetwork[j].push(i);
+    }
+  }
+  addEvt("ea", "💱 MARCHÉ NOIR — Les gains circulent entre stratèges voisins !");
+}
+
+function marcheStep(pay) {
+  // Phase 1 : matchups normaux, accumulation de profits
+  const fitBefore = T.strats.map(s => s.pop);
+  getGroups().forEach(g => simGroup(g, pay));
+
+  // Phase 2 : échange de 15% des gains entre voisins coopérateurs
+  const exchange = new Float64Array(T.N);
+  T.strats.forEach((s, i) => {
+    const gained = Math.max(0, s.pop - fitBefore[i]);
+    T.marcheProfits[i] += gained;
+    // Distribue à ses voisins coopérateurs
+    const coopNeighbors = (T.marcheNetwork[i]||[]).filter(j => (T.strats[j].coopRate||0.5) > 0.5);
+    if(coopNeighbors.length > 0 && T.marcheProfits[i] > 0) {
+      const share = T.marcheProfits[i] * 0.15 / coopNeighbors.length;
+      coopNeighbors.forEach(j => { exchange[j] += share; });
+      T.marcheProfits[i] *= 0.85;
+    }
+  });
+  // Applique les échanges
+  T.strats.forEach((s, i) => {
+    s.pop += exchange[i] * 0.3; // facteur d'atténuation
+    T.marcheProfits[i] += exchange[i];
+  });
+  // Renormalise
+  const tot = T.strats.reduce((a,x)=>a+x.pop,0)||1;
+  T.strats.forEach(s => s.pop = s.pop/tot*T.POP);
+}
+
+// ===== MODE LAMARCKIEN =====
+function initLamarck() {
+  T.lamarckMemory = T.strats.map(() => []); // mémoire héréditaire par stratège
+  T.lamarckGen = 0;
+  addEvt("ea", "🧬 LAMARCKIEN — La mémoire comportementale se transmet aux descendants !");
+}
+
+function lamarckStep(pay) {
+  T.lamarckGen++;
+  // Joue les matchups normaux
+  const popsBefore = T.strats.map(s => s.pop);
+  getGroups().forEach(g => simGroup(g, pay));
+
+  // Enregistre le comportement de cette génération dans la mémoire héréditaire
+  T.strats.forEach((s, i) => {
+    if(!T.lamarckMemory[i]) T.lamarckMemory[i] = [];
+    T.lamarckMemory[i].push(s.coopRate || 0.5);
+    if(T.lamarckMemory[i].length > 30) T.lamarckMemory[i].shift(); // fenêtre glissante
+  });
+
+  // Transmission héréditaire : les stratèges dont la pop croît "héritent" du biais mémoire
+  T.strats.forEach((s, i) => {
+    const popGrowth = s.pop - popsBefore[i];
+    if(popGrowth > T.POP * 0.01 && T.lamarckMemory[i].length >= 5) {
+      // Ce stratège est en expansion → transmet son biais mémoriel aux voisins similaires
+      const memAvg = T.lamarckMemory[i].reduce((a,x)=>a+x,0) / T.lamarckMemory[i].length;
+      // Ajuste doucement son coopRate futur en fonction de sa mémoire ancestrale
+      s.coopRate = s.coopRate * 0.80 + memAvg * 0.20;
+    }
+    // Les stratèges en déclin oublient : leur mémoire se réinitialise partiellement
+    if(popGrowth < -T.POP * 0.02 && T.lamarckMemory[i].length > 0) {
+      T.lamarckMemory[i] = T.lamarckMemory[i].slice(-5); // conserve seulement les 5 derniers
+    }
   });
 }
 function drawNetGraph() {
