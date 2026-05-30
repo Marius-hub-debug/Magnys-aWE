@@ -2515,20 +2515,7 @@ const ALL_IDS = ALL_STRATS.map(s=>s.sid);
     <span><b style="color:var(--red)">⊖⊖</b> Écrasé</span>
     <span style="margin-left:auto;color:var(--dim)">Basé sur compatibilité tc × tc — ${ALL_STRATS.length}×${ALL_STRATS.length} = ${ALL_STRATS.length*ALL_STRATS.length} cellules</span>
   </div>`;
-  document.getElementById("wp-matchups").innerHTML = mhtml;
-  const symMap = { "++": "pp", "+": "p", "~": "e", "-": "n", "--": "nn" };
-  const lblMap = { "++": "⊕⊕", "+": "⊕", "~": "~", "-": "⊖", "--": "⊖⊖" };
-  document.getElementById("wp-matchups").innerHTML = `
-    <div style="font-size:8px;line-height:1.6;color:rgba(255,255,255,.5);margin-bottom:10px">Résultats 1v1 théoriques sans bruit. <b style="color:var(--teal)">⊕⊕</b>=excellent <b style="color:rgba(0,229,200,.55)">⊕</b>=bon <b>~</b>=neutre <b style="color:rgba(255,48,96,.55)">⊖</b>=faible <b style="color:var(--red)">⊖⊖</b>=écrasé</div>
-    <div style="overflow-x:auto">
-    <table class="mu-table">
-      <tr><th>vs →</th>${archs.map(a => `<th>${a}</th>`).join("")}</tr>
-      ${archs.map(row => `<tr><td>${row}</td>${archs.map(col => {
-    const o = outcomes[row]?.[col] || "~";
-    return `<td><span class="mu-vp ${symMap[o]}">${lblMap[o]}</span></td>`;
-  }).join("")}</tr>`).join("")}
-    </table>
-    </div>
+document.getElementById("wp-matchups").innerHTML = mhtml + `
     <div style="margin-top:12px;font-size:8px;line-height:1.7;color:rgba(255,255,255,.45)">
     <b style="color:var(--gold)">Note :</b> En Sandbox multicorps (Round Robin), ces interactions s'entremêlent. Écraser un AllC en 1v1 ne vous fera pas gagner si les TFT vous détruisent en parallèle !
     </div>`;
