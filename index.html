@@ -2639,6 +2639,7 @@ const maxPhases = p.structure === "swiss" ? Math.min(p.PHASES+1, 6) :
     obsArenas:null, obsWins:null, obsGens:0,
     tempSeuil: 0 
   };
+  openModal();
   if(p.structure === "bracket"){
     T.bracket=[[{group:[...Array(p.N).keys()],done:false,ranked:[],track:"all"}],[],[]];
     if(p.N===16) T.bracket.push([]);
@@ -2720,7 +2721,7 @@ const maxPhases = p.structure === "swiss" ? Math.min(p.PHASES+1, 6) :
   if(p.modifiers.includes("civilisation")) { const b=document.getElementById("civilisation-banner"); if(b) b.style.display=""; }
   if(p.N>=4){const hs=document.getElementById("heatmap-section");if(hs)hs.style.display="";}
   const bff=document.getElementById("btn-ff");if(bff)bff.classList.add("visible");
-  clearCanvas();clearCoopCanvas();updateLegend();openModal();
+  clearCanvas();clearCoopCanvas();updateLegend();
 }
 function getGroups(){
   const {structure, eol, modifiers, phase, N, bracket} = T;
