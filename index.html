@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initigfal-scale=1.0">
 <title>Axelrod Arena X · v17</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
 <style>
@@ -1164,26 +1164,67 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 
 <div id="builder-modal-bg">
  <div id="builder-modal">
-  <div class="bld-title">🔧 Mon Stratège</div>
-  <div class="bld-sub">Créez votre propre stratégie en configurant son comportement</div>
+  <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px">
+   <div id="bld-tab-sliders" onclick="switchBldTab('sliders')"
+    style="padding:8px 14px;font-size:8px;cursor:pointer;border-bottom:2px solid var(--gold);color:var(--gold);letter-spacing:.1em;user-select:none">⚙ SLIDERS</div>
+   <div id="bld-tab-code" onclick="switchBldTab('code')"
+    style="padding:8px 14px;font-size:8px;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);letter-spacing:.1em;user-select:none">💻 CODE JS</div>
+  </div>
+  <div class="bld-title" id="bld-title-txt">🔧 Mon Stratège</div>
+  <div class="bld-sub">Créez votre propre stratégie — par sliders ou en JavaScript pur</div>
   <input class="bld-name-input" id="bld-name" placeholder="Nom de votre stratège..." value="Mon Stratège">
-  <div class="bld-row"><span class="bld-lbl">🤝 Coop initiale</span>
-   <input type="range" min="0" max="100" value="100" id="bld-init" style="flex:1;accent-color:var(--teal)" oninput="updateBuilderPreview()">
-   <span class="bld-val" id="bld-init-v">100%</span></div>
-  <div class="bld-row"><span class="bld-lbl">⚡ Représailles</span>
-   <input type="range" min="0" max="100" value="80" id="bld-ret" style="flex:1;accent-color:var(--red)" oninput="updateBuilderPreview()">
-   <span class="bld-val" id="bld-ret-v">80%</span></div>
-  <div class="bld-row"><span class="bld-lbl">💚 Pardon</span>
-   <input type="range" min="0" max="100" value="20" id="bld-forg" style="flex:1;accent-color:var(--green)" oninput="updateBuilderPreview()">
-   <span class="bld-val" id="bld-forg-v">20%</span></div>
-  <div class="bld-row"><span class="bld-lbl">🎲 Aléatoire</span>
-   <input type="range" min="0" max="40" value="0" id="bld-rand" style="flex:1;accent-color:var(--purple)" oninput="updateBuilderPreview()">
-   <span class="bld-val" id="bld-rand-v">0%</span></div>
-  <div class="bld-row"><span class="bld-lbl">💾 Mémoire</span>
-   <input type="range" min="1" max="10" value="1" id="bld-mem" style="flex:1;accent-color:var(--gold)" oninput="updateBuilderPreview()">
-   <span class="bld-val" id="bld-mem-v">1 coup</span></div>
-  <div class="bld-preview"><div class="bld-preview-title">Comportement</div><div id="bld-preview-txt"></div></div>
-  <div style="display:flex;justify-content:flex-end;gap:7px">
+
+  <!-- Onglet Sliders -->
+  <div id="bld-panel-sliders">
+   <div class="bld-row"><span class="bld-lbl">🤝 Coop initiale</span>
+    <input type="range" min="0" max="100" value="100" id="bld-init" style="flex:1;accent-color:var(--teal)" oninput="updateBuilderPreview()">
+    <span class="bld-val" id="bld-init-v">100%</span></div>
+   <div class="bld-row"><span class="bld-lbl">⚡ Représailles</span>
+    <input type="range" min="0" max="100" value="80" id="bld-ret" style="flex:1;accent-color:var(--red)" oninput="updateBuilderPreview()">
+    <span class="bld-val" id="bld-ret-v">80%</span></div>
+   <div class="bld-row"><span class="bld-lbl">💚 Pardon</span>
+    <input type="range" min="0" max="100" value="20" id="bld-forg" style="flex:1;accent-color:var(--green)" oninput="updateBuilderPreview()">
+    <span class="bld-val" id="bld-forg-v">20%</span></div>
+   <div class="bld-row"><span class="bld-lbl">🎲 Aléatoire</span>
+    <input type="range" min="0" max="40" value="0" id="bld-rand" style="flex:1;accent-color:var(--purple)" oninput="updateBuilderPreview()">
+    <span class="bld-val" id="bld-rand-v">0%</span></div>
+   <div class="bld-row"><span class="bld-lbl">💾 Mémoire</span>
+    <input type="range" min="1" max="10" value="1" id="bld-mem" style="flex:1;accent-color:var(--gold)" oninput="updateBuilderPreview()">
+    <span class="bld-val" id="bld-mem-v">1 coup</span></div>
+   <div class="bld-preview"><div class="bld-preview-title">Comportement</div><div id="bld-preview-txt"></div></div>
+  </div>
+
+  <!-- Onglet Code JS -->
+  <div id="bld-panel-code" style="display:none">
+   <div style="font-size:7px;color:var(--muted);margin-bottom:6px;line-height:1.6">
+    La fonction reçoit : <code style="color:var(--teal)">history</code> (coups adverses passés, ex: ["coop","betray"]),
+    <code style="color:var(--teal)">round</code> (numéro du round),
+    <code style="color:var(--teal)">state</code> (objet persistant entre rounds),
+    <code style="color:var(--teal)">selfPop</code>, <code style="color:var(--teal)">groupPop</code>.
+    Retourne <code style="color:var(--gold)">"coop"</code> ou <code style="color:var(--gold)">"betray"</code>.
+   </div>
+   <textarea id="bld-code-editor"
+    style="width:100%;height:220px;background:rgba(0,0,0,.5);border:1px solid var(--border);border-radius:6px;
+    color:var(--teal);font-family:'DM Mono',monospace;font-size:10px;padding:10px;resize:vertical;
+    line-height:1.6;tab-size:2;outline:none"
+    spellcheck="false"
+    placeholder="// Écrivez votre logique ici...
+// Exemples :
+if (round === 0) return 'coop';
+if (history.length === 0) return 'coop';
+const lastOpp = history[history.length - 1];
+return lastOpp === 'betray' ? 'betray' : 'coop';"></textarea>
+   <div style="display:flex;gap:7px;margin-top:7px;align-items:center">
+    <button class="btn bq bsm" onclick="loadCodeTemplate('tft')">TFT</button>
+    <button class="btn bq bsm" onclick="loadCodeTemplate('bayesian')">Bayésien</button>
+    <button class="btn bq bsm" onclick="loadCodeTemplate('pavlov')">Pavlov</button>
+    <button class="btn bq bsm" onclick="loadCodeTemplate('random')">Aléatoire</button>
+    <button class="btn bq bsm" onclick="testCodeStrategy()" style="margin-left:auto;color:var(--teal);border-color:rgba(0,229,200,.3)">▶ Tester</button>
+   </div>
+   <div id="bld-code-result" style="margin-top:8px;font-size:8px;line-height:1.7;display:none;padding:8px;border-radius:6px;border:1px solid var(--border);background:rgba(0,0,0,.3)"></div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;gap:7px;margin-top:10px">
    <button class="btn bq bsm" onclick="closeBuilder()">Annuler</button>
    <button class="btn bteal bsm" onclick="saveBuilder()">✓ Créer ce stratège</button>
   </div>
@@ -5352,6 +5393,130 @@ function saveBuilder(){
   draft.me=customStrategy.sid;
   renderSlots();updateSummary();
 }
+let _bldActiveTab = "sliders";
+
+function switchBldTab(tab) {
+  _bldActiveTab = tab;
+  document.getElementById("bld-panel-sliders").style.display = tab === "sliders" ? "" : "none";
+  document.getElementById("bld-panel-code").style.display   = tab === "code"    ? "" : "none";
+  const ts = document.getElementById("bld-tab-sliders");
+  const tc = document.getElementById("bld-tab-code");
+  ts.style.borderBottomColor = tab==="sliders" ? "var(--gold)" : "transparent";
+  ts.style.color = tab==="sliders" ? "var(--gold)" : "var(--muted)";
+  tc.style.borderBottomColor = tab==="code" ? "var(--gold)" : "transparent";
+  tc.style.color = tab==="code" ? "var(--gold)" : "var(--muted)";
+}
+
+const CODE_TEMPLATES = {
+  tft: `// Tit-for-Tat
+if (round === 0) return 'coop';
+return history[history.length - 1];`,
+
+  bayesian: `// Bayésien simple
+if (!history.length) return 'coop';
+const alpha = 2 + history.filter(x => x === 'coop').length;
+const beta  = 2 + history.filter(x => x === 'betray').length;
+const pCoop = alpha / (alpha + beta);
+// R=3, T=5, S=0, P=1
+const eC = pCoop * 3 + (1 - pCoop) * 0;
+const eD = pCoop * 5 + (1 - pCoop) * 1;
+return eC >= eD * 0.9 ? 'coop' : 'betray';`,
+
+  pavlov: `// Pavlov (Win-Stay Lose-Shift)
+if (round === 0) { state.last = 'coop'; return 'coop'; }
+const opp = history[history.length - 1];
+const my  = state.last || 'coop';
+const win = (my === 'coop' && opp === 'coop') || (my === 'betray' && opp === 'betray');
+state.last = win ? my : (my === 'coop' ? 'betray' : 'coop');
+return state.last;`,
+
+  random: `// Aléatoire pondéré (60% coop)
+return Math.random() < 0.60 ? 'coop' : 'betray';`,
+};
+
+function loadCodeTemplate(name) {
+  const ta = document.getElementById("bld-code-editor");
+  if(ta && CODE_TEMPLATES[name]) ta.value = CODE_TEMPLATES[name];
+  const res = document.getElementById("bld-code-result");
+  if(res) res.style.display = "none";
+}
+
+function testCodeStrategy() {
+  const code = document.getElementById("bld-code-editor")?.value || "";
+  const res  = document.getElementById("bld-code-result");
+  if(!res) return;
+  try {
+    const fn = new Function("history","round","state","selfPop","groupPop", code);
+    // Simule 20 rounds contre TFT
+    const results = [];
+    let histOpp = [], stateObj = {};
+    let myMoves = [], oppMoves = [];
+    for(let r = 0; r < 20; r++) {
+      const myMove = fn(histOpp, r, stateObj, 500, 1000) || "coop";
+      // TFT répond
+      const oppMove = r === 0 ? "coop" : myMoves[myMoves.length - 1];
+      myMoves.push(myMove); oppMoves.push(oppMove);
+      histOpp.push(oppMove);
+      const R=3,T=5,P=1,S=0;
+      const score = myMove==="coop" ? (oppMove==="coop"?R:S) : (oppMove==="coop"?T:P);
+      results.push({r, my:myMove, opp:oppMove, score});
+    }
+    const totalScore = results.reduce((s,x)=>s+x.score,0);
+    const coopPct = Math.round(results.filter(x=>x.my==="coop").length / results.length * 100);
+    const preview20 = results.map(x=>`<span style="color:${x.my==="coop"?"var(--teal)":"var(--red)"};font-size:8px">${x.my==="coop"?"C":"T"}</span>`).join(" ");
+    res.innerHTML = `<div style="color:var(--green);margin-bottom:5px">✓ Code valide — Simulation vs TFT (20 rounds)</div>
+      <div style="margin-bottom:4px">${preview20}</div>
+      <div style="font-size:7px;color:var(--muted)">Score total: <b style="color:var(--gold)">${totalScore}</b> · Coop: <b style="color:var(--teal)">${coopPct}%</b> · Moy: <b>${(totalScore/20).toFixed(2)}/round</b></div>`;
+    res.style.borderColor="rgba(61,232,122,.3)";
+    res.style.display = "";
+  } catch(e) {
+    res.innerHTML = `<div style="color:var(--red)">✗ Erreur : ${e.message}</div>`;
+    res.style.borderColor="rgba(255,48,96,.3)";
+    res.style.display = "";
+  }
+}
+
+// Patch saveBuilder pour gérer l'onglet code
+const _origSaveBuilder = saveBuilder;
+saveBuilder = function() {
+  if(_bldActiveTab === "code") {
+    const code = document.getElementById("bld-code-editor")?.value || "";
+    const name = document.getElementById("bld-name")?.value?.trim() || "Mon Stratège";
+    let fn;
+    try { fn = new Function("history","round","state","selfPop","groupPop", code); }
+    catch(e) { alert("Erreur dans le code JS : " + e.message); return; }
+    // Test rapide
+    try { fn([], 0, {}, 500, 1000); }
+    catch(e) { alert("Erreur à l'exécution : " + e.message); return; }
+    customStrategy = {
+      sid:"custom_code_"+Date.now(), name, e:"💻", char:"Code",
+      tag:"CODE", color:"#00d4ff",
+      desc:`Stratège codé en JS par le joueur : "${name}"`,
+      behav:"Logique personnalisée en JavaScript", tags:[{t:"custom",c:"adapt"}],
+      stats:{"Type":"Code JS","Auteur":"Joueur","Mémoire":"Variable"},
+      vs:"Dépend entièrement de votre code.",
+      fn(h,r,st,sp,gp){ try{return fn(h,r,st,sp,gp)||"coop";}catch{return"coop";} }
+    };
+    const existingIdx = ALL_STRATS.findIndex(s=>s.sid===customStrategy.sid);
+    if(existingIdx<0){
+      ALL_STRATS.push(customStrategy);
+      const cc = CHARS.find(c=>c.name==="Personnalisé") || CHARS.find(c=>c.name==="Code");
+      if(cc){ cc.strats.push(customStrategy); }
+      else{ CHARS.push({name:"Code",e:"💻",color:"#00d4ff",strats:[customStrategy]}); }
+      buildCharGrid();
+    }
+    closeBuilder();
+    if(!draft.sel.includes(customStrategy.sid)){
+      if(draft.sel.length<nPlayers) draft.sel.push(customStrategy.sid);
+      else draft.sel[draft.sel.length-1]=customStrategy.sid;
+      renderSlots(); updateSummary();
+    }
+    draft.me = customStrategy.sid;
+    renderSlots(); updateSummary();
+  } else {
+    _origSaveBuilder();
+  }
+};
 const MISSIONS=[
   {id:"m1",n:"MISSION 01",name:"Les Origines",
    story:"Nous sommes en 1981. Axelrod vient de recevoir les résultats de son premier tournoi. Un inconnu nommé Rapoport a soumis le code le plus simple : 4 lignes. Vous jouez TFT. Prouvez qu'il méritait de gagner.",
