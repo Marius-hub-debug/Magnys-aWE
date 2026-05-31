@@ -2029,7 +2029,7 @@ const CHARS=[
        return coopRate<0.5?"betray":"coop";
      }},
   ]},
-  ,{id:"zara", name:"Zara", e:"🔭", color:"#00d4ff", strats:[
+  {id:"zara", name:"Zara", e:"🔭", color:"#00d4ff", strats:[
     {sid:"zara_a", name:"L'Astronome", tag:"Bayésien", tc:"adapt",
      desc:"Modèle bayésien : estime la probabilité que l'adversaire soit coopérateur selon l'historique complet, puis choisit l'action qui maximise l'espérance mathématique de gain.",
      behav:"P(coop|historique) × R + P(trahison|historique) × S vs inverse — prend le max",
